@@ -2649,7 +2649,7 @@ func Text(theArgs ...interface{}) {
 	aFontScale := 0.4
 	aColor := uint32(0xCECECE)
 
-	if _, ok := theArgs[0].(*gocv.Mat); ok {
+	if _, ok := theArgs[0].(gocv.Mat); ok {
 		// Signature: text(theWhere, theX, theY, theText, theFontScale = 0.4, theColor = 0xCECECE)
 		aWhere := theArgs[0].(gocv.Mat)
 		aX = theArgs[1].(int)
@@ -2751,7 +2751,7 @@ func Checkbox(theArgs ...interface{}) bool {
 	var aLabel string
 	var aState []bool
 	aColor := uint32(0xCECECE)
-	if _, ok := theArgs[0].(*gocv.Mat); ok {
+	if _, ok := theArgs[0].(gocv.Mat); ok {
 		// Signature: checkbox(theWhere, theX, theY, theLabel, theState, theColor = 0xCECECE)
 		aWhere := theArgs[0].(gocv.Mat)
 		aX = theArgs[1].(int)
