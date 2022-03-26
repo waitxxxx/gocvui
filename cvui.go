@@ -1,5 +1,11 @@
 package gocvui
 
+/*
+#include <stdlib.h>
+#include "modules/highgui_gocv.h"
+*/
+import "C"
+
 import (
 	"errors"
 	"fmt"
@@ -8,6 +14,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"unsafe"
 
 	"gocv.io/x/gocv"
 )
@@ -74,13 +81,20 @@ func init() {
 
 type Window struct {
 	*gocv.Window
+	Name         string
 	OnMouse      func(theEvent int, theX, theY int, theFlags int, theContext *Context)
 	OnMouseParam interface{}
 }
 
 func (w *Window) SetMouseCallback(callbackFunc func(theEvent int, theX, theY int, theFlags int, theContext *Context), context Context) {
-	w.OnMouse = callbackFunc
-	w.OnMouseParam = context
+	// w.OnMouse = callbackFunc
+	// w.OnMouseParam = context
+
+	cName := C.CString(__internal.CurrentContext)
+	defer C.free(unsafe.Pointer(cName))
+
+	cFunc := C.MouseCallback(callbackFunc)
+	C.Set_Mouse_Callback(cName, cFunc, 0)
 }
 
 // Represent a 2D point.
@@ -130,7 +144,7 @@ func NewSize(theWidth, theHeight int) Size {
 	return Size{0, 0, theWidth, theHeight}
 }
 
-// Describe a block structure used by cvui to handle `begin*()` and `end*()` calls.
+// Describe a block structure used by gocvui to handle `begin*()` and `end*()` calls.
 type Block struct {
 	Where   gocv.Mat
 	Rect    Rect
@@ -213,7 +227,7 @@ type Mouse struct {
 
 func NewMouse() Mouse {
 	return Mouse{
-		Buttons: map[int]*MouseButton{ // status of each button. Use cvui.{RIGHT,LEFT,MIDDLE}_BUTTON to access the buttons.
+		Buttons: map[int]*MouseButton{ // status of each button. Use gocvui.{RIGHT,LEFT,MIDDLE}_BUTTON to access the buttons.
 			LEFT_BUTTON:   NewMouseButton(),
 			MIDDLE_BUTTON: NewMouseButton(),
 			RIGHT_BUTTON:  NewMouseButton(),
@@ -264,7 +278,7 @@ func NewTrackbarParams(theMin, theMax, theStep float64, theSegments int, theLabe
 	}
 }
 
-// This class contains all stuff that cvui uses internally to render
+// This class contains all stuff that gocvui uses internally to render
 // and control interaction with components.
 type Internal struct {
 	DefaultContext  string
@@ -324,7 +338,7 @@ func (in *Internal) IsMouseButton(theButton *MouseButton, theQuery int) bool {
 }
 
 // Return the last position of the mouse.
-// param theWindowName name of the window whose mouse cursor will be used. If nothing is informed (default), the function will return the position of the mouse cursor for the default window (the one informed in `cvui::init()`).
+// param theWindowName name of the window whose mouse cursor will be used. If nothing is informed (default), the function will return the position of the mouse cursor for the default window (the one informed in `gocvui::Init()`).
 // return a point containing the position of the mouse cursor in the speficied window.
 func (in *Internal) MouseW(theWindowName string) Point {
 	return in.GetContext(theWindowName).Mouse.Position
@@ -332,46 +346,46 @@ func (in *Internal) MouseW(theWindowName string) Point {
 
 // Query the mouse for events, e.g. "is any button down now?". Available queries are:
 
-// * `cvui::DOWN`: any mouse button was pressed. `cvui::mouse()` returns `true` for a single frame only.
-// * `cvui::UP`: any mouse button was released.  `cvui::mouse()` returns `true` for a single frame only.
-// * `cvui::CLICK`: any mouse button was clicked (went down then up, no matter the amount of frames in between). `cvui::mouse()` returns `true` for a single frame only.
-// * `cvui::IS_DOWN`: any mouse button is currently pressed. `cvui::mouse()` returns `true` for as long as the button is down/pressed.
+// * `gocvui::DOWN`: any mouse button was pressed. `gocvui::mouse()` returns `true` for a single frame only.
+// * `gocvui::UP`: any mouse button was released.  `gocvui::mouse()` returns `true` for a single frame only.
+// * `gocvui::CLICK`: any mouse button was clicked (went down then up, no matter the amount of frames in between). `gocvui::mouse()` returns `true` for a single frame only.
+// * `gocvui::IS_DOWN`: any mouse button is currently pressed. `gocvui::mouse()` returns `true` for as long as the button is down/pressed.
 
 // It is easier to think of this function as the answer to a questions. For instance, asking if any mouse button went down:
 
 // ```
-// if (cvui::mouse(cvui::DOWN)) {
+// if (gocvui::Mouse(gocvui::DOWN)) {
 // 	// Any mouse button just went down.
 // }
 // ```
 
-// The window whose mouse will be queried depends on the context. If `cvui::mouse(query)` is being called after
-// `cvui::context()`, the window informed in the context will be queried. If no context is available, the default
-// window (informed in `cvui::init()`) will be used.
+// The window whose mouse will be queried depends on the context. If `gocvui::Mouse(query)` is being called after
+// `gocvui::Context()`, the window informed in the context will be queried. If no context is available, the default
+// window (informed in `gocvui::Init()`) will be used.
 
 // Parameters
 // ----------
 // theQuery: int
-// 	Integer describing the intended mouse query. Available queries are `cvui::DOWN`, `cvui::UP`, `cvui::CLICK`, and `cvui::IS_DOWN`.
+// 	Integer describing the intended mouse query. Available queries are `gocvui::DOWN`, `gocvui::UP`, `gocvui::CLICK`, and `gocvui::IS_DOWN`.
 
-// \sa mouse(const cv::String&)
-// \sa mouse(const cv::String&, int)
-// \sa mouse(const cv::String&, int, int)
-// \sa mouse(int, int)
+// Mouse(const cv::String&)
+// Mouse(const cv::String&, int)
+// Mouse(const cv::String&, int, int)
+// Mouse(int, int)
 func (in *Internal) MouseQ(theQuery int) bool {
 	return in.MouseWQ("", theQuery)
 }
 
-// Query the mouse for events in a particular window. This function behave exactly like `cvui::mouse(int theQuery)`
+// Query the mouse for events in a particular window. This function behave exactly like `gocvui::mouse(int theQuery)`
 // with the difference that queries are targeted at a particular window.
 
 // \param theWindowName name of the window that will be queried.
-// \param theQuery an integer describing the intended mouse query. Available queries are `cvui::DOWN`, `cvui::UP`, `cvui::CLICK`, and `cvui::IS_DOWN`.
+// \param theQuery an integer describing the intended mouse query. Available queries are `gocvui::DOWN`, `gocvui::UP`, `gocvui::CLICK`, and `gocvui::IS_DOWN`.
 
-// \sa mouse(const cv::String&)
-// \sa mouse(const cv::String&, int, int)
-// \sa mouse(int, int)
-// \sa mouse(int)
+// Mouse(const cv::String&)
+// Mouse(const cv::String&, int, int)
+// Mouse(int, int)
+// Mouse(int)
 func (in *Internal) MouseWQ(theWindowName string, theQuery int) bool {
 	aButton := in.GetContext(theWindowName).Mouse.AnyButton
 	aRet := in.IsMouseButton(aButton, theQuery)
@@ -379,12 +393,12 @@ func (in *Internal) MouseWQ(theWindowName string, theQuery int) bool {
 }
 
 // Query the mouse for events in a particular button in a particular window. This function behave exactly
-// like `cvui::mouse(int theButton, int theQuery)`, with the difference that queries are targeted at
+// like `gocvui::Mouse(int theButton, int theQuery)`, with the difference that queries are targeted at
 // a particular mouse button in a particular window instead.
 
 // \param theWindowName name of the window that will be queried.
-// \param theButton an integer describing the mouse button to be queried. Possible values are `cvui::LEFT_BUTTON`, `cvui::MIDDLE_BUTTON` and `cvui::LEFT_BUTTON`.
-// \param theQuery an integer describing the intended mouse query. Available queries are `cvui::DOWN`, `cvui::UP`, `cvui::CLICK`, and `cvui::IS_DOWN`.
+// \param theButton an integer describing the mouse button to be queried. Possible values are `gocvui::LEFT_BUTTON`, `gocvui::MIDDLE_BUTTON` and `gocvui::LEFT_BUTTON`.
+// \param theQuery an integer describing the intended mouse query. Available queries are `gocvui::DOWN`, `gocvui::UP`, `gocvui::CLICK`, and `gocvui::IS_DOWN`.
 func (in *Internal) MouseWBQ(theWindowName string, theButton int, theQuery int) bool {
 	if theButton != RIGHT_BUTTON && theButton != MIDDLE_BUTTON && theButton != LEFT_BUTTON {
 		__internal.Error(6, "Invalid mouse button. Are you using one of the available: cvui.{RIGHT,MIDDLE,LEFT}_BUTTON ?")
@@ -425,7 +439,7 @@ func (in *Internal) GetContext(theWindowName string) Context {
 		return in.Contexts[in.DefaultContext]
 	} else {
 		// Apparently we have no window at all! <o>
-		// This should not happen. Probably cvui::init() was never called.
+		// This should not happen. Probably gocvui::Init() was never called.
 		errMsg := "Unable to read context. Did you forget to call cvui.init()?"
 		in.Error(5, errMsg)
 		return Context{}
@@ -1267,10 +1281,10 @@ func handleMouse(theEvent int, theX, theY int, theFlags int, theContext *Context
 // 	print("This is wrapper function to help code autocompletion.")
 
 // 	Track UI interactions of a particular window. This function must be invoked
-// 	for any window that will receive cvui components. cvui automatically calls `cvui.watch()`
-// 	for any window informed in `cvui.init()`, so generally you don"t have to watch them
-// 	yourin. If you initialized cvui and told it *not* to create windows automatically,
-// 	you need to call `cvui.watch()` on those windows yourin. `cvui.watch()` can
+// 	for any window that will receive gocvui components. gocvui automatically calls `gocvui.watch()`
+// 	for any window informed in `gocvui.init()`, so generally you don"t have to watch them
+// 	yourin. If you initialized gocvui and told it *not* to create windows automatically,
+// 	you need to call `gocvui.watch()` on those windows yourin. `gocvui.watch()` can
 // 	automatically create a window before watching it, if it does not exist.
 
 // 	Parameters
@@ -1278,7 +1292,7 @@ func handleMouse(theEvent int, theX, theY int, theFlags int, theContext *Context
 // 	theWindowName: str
 // 		name of the window whose UI interactions will be tracked.
 // 	theCreateNamedWindow: bool
-// 		if an OpenCV window named `theWindowName` should be created before it is watched. Windows are created using `cv2.namedWindow()`. If this parameter is `false`, ensure you have called `cv2.namedWindow(WINDOW_NAME)` to create the window, otherwise cvui will not be able to track its UI interactions.
+// 		if an OpenCV window named `theWindowName` should be created before it is watched. Windows are created using `cv2.namedWindow()`. If this parameter is `false`, ensure you have called `cv2.namedWindow(WINDOW_NAME)` to create the window, otherwise gocvui will not be able to track its UI interactions.
 
 // 	See Also
 // 	----------
@@ -1288,6 +1302,7 @@ func Watch(theWindowName string, theCreateNamedWindow bool) {
 	var window Window
 	if theCreateNamedWindow {
 		window.Window = gocv.NewWindow(theWindowName) //Open windows
+		window.Name = theWindowName
 	}
 	aContex := NewContext()
 	aContex.Window = window.Window
@@ -1305,62 +1320,62 @@ func Watch(theWindowName string, theCreateNamedWindow bool) {
 
 // def context(theWindowName):
 // 	"""
-// 	Inform cvui that all subsequent component calls belong to a window in particular.
-// 	When using cvui with multiple OpenCV windows, you must call cvui component calls
-// 	between `cvui.contex(NAME)` and `cvui.update(NAME)`, where `NAME` is the name of
-// 	the window. That way, cvui knows which window you are using (`NAME` in this case),
+// 	Inform gocvui that all subsequent component calls belong to a window in particular.
+// 	When using gocvui with multiple OpenCV windows, you must call gocvui component calls
+// 	between `gocvui.contex(NAME)` and `gocvui.update(NAME)`, where `NAME` is the name of
+// 	the window. That way, gocvui knows which window you are using (`NAME` in this case),
 // 	so it can track mouse events, for instance.
 
 // 	E.g.
 
 // 	```
 // 	// Code for window "window1".
-// 	cvui.context("window1")
-// 	cvui.text(frame, ...)
-// 	cvui.button(frame, ...)
-// 	cvui.update("window1")
+// 	gocvui.context("window1")
+// 	gocvui.text(frame, ...)
+// 	gocvui.button(frame, ...)
+// 	gocvui.update("window1")
 
 // 	// somewhere else, code for "window2"
-// 	cvui.context("window2")
-// 	cvui.printf(frame, ...)
-// 	cvui.printf(frame, ...)
-// 	cvui.update("window2")
+// 	gocvui.context("window2")
+// 	gocvui.printf(frame, ...)
+// 	gocvui.printf(frame, ...)
+// 	gocvui.update("window2")
 
 // 	// Show everything in a window
-// 	cv2.imshow(frame)
+// 	gocv.Window.IMShow(frame)
 // 	```
 
-// 	Pay attention to the pair `cvui.context(NAME)` and `cvui.update(NAME)`, which
+// 	Pay attention to the pair `gocvui.context(NAME)` and `gocvui.update(NAME)`, which
 // 	encloses the component calls for that window. You need such pair for each window
 // 	of your application.
 
-// 	After calling `cvui.update()`, you can show the result in a window using `cv2.imshow()`.
-// 	If you want to save some typing, you can use `cvui.imshow()`, which calls `cvui.update()`
+// 	After calling `gocvui.update()`, you can show the result in a window using `gocv.Window.IMShow()`.
+// 	If you want to save some typing, you can use `gocvui.imshow()`, which calls `gocvui.update()`
 // 	for you and then shows the frame in a window.
 
 // 	E.g.:
 
 // 	```
 // 	// Code for window "window1".
-// 	cvui.context("window1")
-// 	cvui.text(frame, ...)
-// 	cvui.button(frame, ...)
-// 	cvui.imshow("window1")
+// 	gocvui.context("window1")
+// 	gocvui.text(frame, ...)
+// 	gocvui.button(frame, ...)
+// 	gocvui.imshow("window1")
 
 // 	// somewhere else, code for "window2"
-// 	cvui.context("window2")
-// 	cvui.printf(frame, ...)
-// 	cvui.printf(frame, ...)
-// 	cvui.imshow("window2")
+// 	gocvui.context("window2")
+// 	gocvui.printf(frame, ...)
+// 	gocvui.printf(frame, ...)
+// 	gocvui.imshow("window2")
 // 	```
 
-// 	In that case, you don"t have to bother calling `cvui.update()` yourself, since
-// 	`cvui.imshow()` will do it for you.
+// 	In that case, you don"t have to bother calling `gocvui.update()` yourself, since
+// 	`gocvui.imshow()` will do it for you.
 
 // 	Parameters
 // 	----------
 // 	theWindowName: str
-// 		name of the window that will receive components from all subsequent cvui calls.
+// 		name of the window that will receive components from all subsequent gocvui calls.
 
 // 	See Also
 // 	----------
@@ -1369,14 +1384,14 @@ func Watch(theWindowName string, theCreateNamedWindow bool) {
 // 	"""
 // 	__internal.currentContext = theWindowName
 
-// 	Display an image in the specified window and update the internal structures of cvui.
-// 	This function can be used as a replacement for `cv2.imshow()`. If you want to use
-// 	`cv2.imshow() instead of `cvui.imshow()`, you must ensure you call `cvui.update()`
-// 	*after* all component calls and *before* `cv2.imshow()`, so cvui can update its
+// 	Display an image in the specified window and update the internal structures of gocvui.
+// 	This function can be used as a replacement for `gocv.Window.IMShow()`. If you want to use
+// 	`gocv.Window.IMShow() instead of `gocvui.imshow()`, you must ensure you call `gocvui.update()`
+// 	*after* all component calls and *before* `gocv.Window.IMShow()`, so gocvui can update its
 // 	internal structures.
 
-// 	In general, it is easier to call `cvui.imshow()` alone instead of calling
-// 	`cvui.update()" immediately followed by `cv2.imshow()`.
+// 	In general, it is easier to call `gocvui.imshow()` alone instead of calling
+// 	`gocvui.update()" immediately followed by `gocv.Window.IMShow()`.
 
 // 	Parameters
 // 	----------
@@ -1400,7 +1415,7 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // def lastKeyPressed():
 // 	"""
 // 	Return the last key that was pressed. This function will only
-// 	work if a value greater than zero was passed to `cvui.init()`
+// 	work if a value greater than zero was passed to `gocvui.init()`
 // 	as the delay waitkey parameter.
 
 // 	See Also
@@ -1416,7 +1431,7 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	Parameters
 // 	----------
 // 	theWindowName: str
-// 		name of the window whose mouse cursor will be used. If nothing is informed (default), the function will return the position of the mouse cursor for the default window (the one informed in `cvui.init()`).
+// 		name of the window whose mouse cursor will be used. If nothing is informed (default), the function will return the position of the mouse cursor for the default window (the one informed in `gocvui.init()`).
 
 // 	Returns
 // 	----------
@@ -1428,27 +1443,27 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	"""
 // 	Query the mouse for events, e.g. "is any button down now?". Available queries are:
 
-// 	* `cvui.DOWN`: any mouse button was pressed. `cvui.mouse()` returns `True` for a single frame only.
-// 	* `cvui.UP`: any mouse button was released.  `cvui.mouse()` returns `True` for a single frame only.
-// 	* `cvui.CLICK`: any mouse button was clicked (went down then up, no matter the amount of frames in between). `cvui.mouse()` returns `True` for a single frame only.
-// 	* `cvui.IS_DOWN`: any mouse button is currently pressed. `cvui.mouse()` returns `True` for as long as the button is down/pressed.
+// 	* `gocvui.DOWN`: any mouse button was pressed. `gocvui.mouse()` returns `True` for a single frame only.
+// 	* `gocvui.UP`: any mouse button was released.  `gocvui.mouse()` returns `True` for a single frame only.
+// 	* `gocvui.CLICK`: any mouse button was clicked (went down then up, no matter the amount of frames in between). `gocvui.mouse()` returns `True` for a single frame only.
+// 	* `gocvui.IS_DOWN`: any mouse button is currently pressed. `gocvui.mouse()` returns `True` for as long as the button is down/pressed.
 
 // 	It is easier to think of this function as the answer to a questions. For instance, asking if any mouse button went down:
 
 // 	```
-// 	if cvui.mouse(cvui.DOWN):
+// 	if gocvui.mouse(gocvui.DOWN):
 // 	// Any mouse button just went down.
 
 // 	```
 
-// 	The window whose mouse will be queried depends on the context. If `cvui.mouse(query)` is being called after
-// 	`cvui.context()`, the window informed in the context will be queried. If no context is available, the default
-// 	window (informed in `cvui.init()`) will be used.
+// 	The window whose mouse will be queried depends on the context. If `gocvui.mouse(query)` is being called after
+// 	`gocvui.context()`, the window informed in the context will be queried. If no context is available, the default
+// 	window (informed in `gocvui.init()`) will be used.
 
 // 	Parameters
 // 	----------
 // 	theQuery: int
-// 		an integer describing the intended mouse query. Available queries are `cvui.DOWN`, `cvui.UP`, `cvui.CLICK`, and `cvui.IS_DOWN`.
+// 		an integer describing the intended mouse query. Available queries are `gocvui.DOWN`, `gocvui.UP`, `gocvui.CLICK`, and `gocvui.IS_DOWN`.
 
 // 	See Also
 // 	----------
@@ -1461,7 +1476,7 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 
 // def mouse(theWindowName, theQuery):
 // 	"""
-// 	Query the mouse for events in a particular window. This function behave exactly like `cvui.mouse(int theQuery)`
+// 	Query the mouse for events in a particular window. This function behave exactly like `gocvui.mouse(int theQuery)`
 // 	with the difference that queries are targeted at a particular window.
 
 // 	Parameters
@@ -1469,7 +1484,7 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	theWindowName: str
 // 		name of the window that will be queried.
 // 	theQuery: int
-// 		an integer describing the intended mouse query. Available queries are `cvui.DOWN`, `cvui.UP`, `cvui.CLICK`, and `cvui.IS_DOWN`.
+// 		an integer describing the intended mouse query. Available queries are `gocvui.DOWN`, `gocvui.UP`, `gocvui.CLICK`, and `gocvui.IS_DOWN`.
 
 // 	See Also
 // 	----------
@@ -1482,15 +1497,15 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 
 // def mouse(theButton, theQuery):
 // 	"""
-// 	Query the mouse for events in a particular button. This function behave exactly like `cvui.mouse(int theQuery)`,
+// 	Query the mouse for events in a particular button. This function behave exactly like `gocvui.mouse(int theQuery)`,
 // 	with the difference that queries are targeted at a particular mouse button instead.
 
 // 	Parameters
 // 	----------
 // 	theButton: int
-// 		an integer describing the mouse button to be queried. Possible values are `cvui.LEFT_BUTTON`, `cvui.MIDDLE_BUTTON` and `cvui.LEFT_BUTTON`.
+// 		an integer describing the mouse button to be queried. Possible values are `gocvui.LEFT_BUTTON`, `gocvui.MIDDLE_BUTTON` and `gocvui.LEFT_BUTTON`.
 // 	theQuery: int
-// 		an integer describing the intended mouse query. Available queries are `cvui.DOWN`, `cvui.UP`, `cvui.CLICK`, and `cvui.IS_DOWN`.
+// 		an integer describing the intended mouse query. Available queries are `gocvui.DOWN`, `gocvui.UP`, `gocvui.CLICK`, and `gocvui.IS_DOWN`.
 
 // 	See Also
 // 	----------
@@ -1503,7 +1518,7 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // def mouse(theWindowName, theButton, theQuery):
 // 	"""
 // 	Query the mouse for events in a particular button in a particular window. This function behave exactly
-// 	like `cvui.mouse(int theButton, int theQuery)`, with the difference that queries are targeted at
+// 	like `gocvui.mouse(int theButton, int theQuery)`, with the difference that queries are targeted at
 // 	a particular mouse button in a particular window instead.
 
 // 	Parameters
@@ -1511,9 +1526,9 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	theWindowName: str
 // 		name of the window that will be queried.
 // 	theButton: int
-// 		an integer describing the mouse button to be queried. Possible values are `cvui.LEFT_BUTTON`, `cvui.MIDDLE_BUTTON` and `cvui.LEFT_BUTTON`.
+// 		an integer describing the mouse button to be queried. Possible values are `gocvui.LEFT_BUTTON`, `gocvui.MIDDLE_BUTTON` and `gocvui.LEFT_BUTTON`.
 // 	theQuery: int
-// 		an integer describing the intended mouse query. Available queries are `cvui.DOWN`, `cvui.UP`, `cvui.CLICK`, and `cvui.IS_DOWN`.
+// 		an integer describing the intended mouse query. Available queries are `gocvui.DOWN`, `gocvui.UP`, `gocvui.CLICK`, and `gocvui.IS_DOWN`.
 // 	"""
 // 	print("This is wrapper function to help code autocompletion.")
 
@@ -1710,7 +1725,7 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	printf(frame, 10, 15, 0.4, 0xff0000, "Text: %d and %f", 7, 3.1415)
 // 	```
 
-// 	The size and color of the text will be based on cvui"s default values.
+// 	The size and color of the text will be based on gocvui"s default values.
 
 // 	Parameters
 // 	----------
@@ -1796,7 +1811,7 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	theLabelFormat: str
 // 		formating string that will be used to render the labels. If you are using a trackbar with integers values, for instance, you can use `%d` to render labels.
 // 	theOptions: uint
-// 		options to customize the behavior/appearance of the trackbar, expressed as a bitset. Available options are defined as `cvui.TRACKBAR_` constants and they can be combined using the bitwise `|` operand. Available options are: `TRACKBAR_HIDE_SEGMENT_LABELS` (do not render segment labels, but do render min/max labels), `TRACKBAR_HIDE_STEP_SCALE` (do not render the small lines indicating values in the scale), `TRACKBAR_DISCRETE` (changes of the trackbar value are multiples of theDiscreteStep param), `TRACKBAR_HIDE_MIN_MAX_LABELS` (do not render min/max labels), `TRACKBAR_HIDE_VALUE_LABEL` (do not render the current value of the trackbar below the moving marker), `TRACKBAR_HIDE_LABELS` (do not render labels at all).
+// 		options to customize the behavior/appearance of the trackbar, expressed as a bitset. Available options are defined as `gocvui.TRACKBAR_` constants and they can be combined using the bitwise `|` operand. Available options are: `TRACKBAR_HIDE_SEGMENT_LABELS` (do not render segment labels, but do render min/max labels), `TRACKBAR_HIDE_STEP_SCALE` (do not render the small lines indicating values in the scale), `TRACKBAR_DISCRETE` (changes of the trackbar value are multiples of theDiscreteStep param), `TRACKBAR_HIDE_MIN_MAX_LABELS` (do not render min/max labels), `TRACKBAR_HIDE_VALUE_LABEL` (do not render the current value of the trackbar below the moving marker), `TRACKBAR_HIDE_LABELS` (do not render labels at all).
 // 	theDiscreteStep: number
 // 		amount that the trackbar marker will increase/decrease when the marker is dragged right/left (if option TRACKBAR_DISCRETE is ON)
 
@@ -1929,16 +1944,16 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	Start a new row.
 
 // 	One of the most annoying tasks when building UI is to calculate
-// 	where each component should be placed on the screen. cvui has
+// 	where each component should be placed on the screen. gocvui has
 // 	a set of methods that abstract the process of positioning
 // 	components, so you don"t have to think about assigning a
-// 	X and Y coordinate. Instead you just add components and cvui
+// 	X and Y coordinate. Instead you just add components and gocvui
 // 	will place them as you go.
 
 // 	You use `beginRow()` to start a group of elements. After `beginRow()`
 // 	has been called, all subsequent component calls don"t have to specify
 // 	the frame where the component should be rendered nor its position.
-// 	The position of the component will be automatically calculated by cvui
+// 	The position of the component will be automatically calculated by gocvui
 // 	based on the components within the group. All components are placed
 // 	side by side, from left to right.
 
@@ -1957,7 +1972,7 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	where the component is rendered, which is also True for `beginRow()`.
 // 	As a consequence, **be sure you are calling `beginRow(width, height)`
 // 	when the call is nested instead of `beginRow(x, y, width, height)`**,
-// 	otherwise cvui will throw an error.
+// 	otherwise gocvui will throw an error.
 
 // 	E.g.
 
@@ -1973,7 +1988,7 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	endRow()
 // 	```
 
-// 	Don"t forget to call `endRow()` to finish the row, otherwise cvui will throw an error.
+// 	Don"t forget to call `endRow()` to finish the row, otherwise gocvui will throw an error.
 
 // 	Parameters
 // 	----------
@@ -2016,16 +2031,16 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	Start a new column.
 
 // 	One of the most annoying tasks when building UI is to calculate
-// 	where each component should be placed on the screen. cvui has
+// 	where each component should be placed on the screen. gocvui has
 // 	a set of methods that abstract the process of positioning
 // 	components, so you don"t have to think about assigning a
-// 	X and Y coordinate. Instead you just add components and cvui
+// 	X and Y coordinate. Instead you just add components and gocvui
 // 	will place them as you go.
 
 // 	You use `beginColumn()` to start a group of elements. After `beginColumn()`
 // 	has been called, all subsequent component calls don"t have to specify
 // 	the frame where the component should be rendered nor its position.
-// 	The position of the component will be automatically calculated by cvui
+// 	The position of the component will be automatically calculated by gocvui
 // 	based on the components within the group. All components are placed
 // 	below each other, from the top of the screen towards the bottom.
 
@@ -2044,7 +2059,7 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	where the component is rendered, which is also True for `beginColumn()`.
 // 	As a consequence, **be sure you are calling `beginColumn(width, height)`
 // 	when the call is nested instead of `beginColumn(x, y, width, height)`**,
-// 	otherwise cvui will throw an error.
+// 	otherwise gocvui will throw an error.
 
 // 	E.g.
 
@@ -2060,7 +2075,7 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	endColumn()
 // 	```
 
-// 	Don"t forget to call `endColumn()` to finish the column, otherwise cvui will throw an error.
+// 	Don"t forget to call `endColumn()` to finish the column, otherwise gocvui will throw an error.
 
 // 	Parameters
 // 	----------
@@ -2384,7 +2399,7 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	printf(frame, 10, 15, 0.4, 0xff0000, "Text: %d and %f", 7, 3.1415)
 // 	```
 
-// 	The size and color of the text will be based on cvui"s default values.
+// 	The size and color of the text will be based on gocvui"s default values.
 
 // 	Parameters
 // 	----------
@@ -2572,16 +2587,23 @@ func Imshow(theWindowName string, theFrame gocv.Mat) {
 // 	Parameters
 // 	----------
 // 	theWindowName: str
-// 		name of the window whose components are being updated. If no window name is provided, cvui uses the default window.
+// 		name of the window whose components are being updated. If no window name is provided, gocvui uses the default window.
 
 // 	See Also
 // 	----------
 // 	init()
 // 	watch()
 // 	context()
-func Update(theWindowName string) {
-	aContext := __internal.GetContext(theWindowName)
+func Update(theArgs ...interface{}) {
+	theWindowName := ""
+	if len(theArgs) != 0 {
+		var ok bool
+		if theWindowName, ok = theArgs[0].(string); !ok {
+			__internal.Error(7, "theWindowName error")
+		}
+	}
 
+	aContext := __internal.GetContext(theWindowName)
 	aContext.Mouse.AnyButton.JustReleased = false
 	aContext.Mouse.AnyButton.JustPressed = false
 
