@@ -1390,11 +1390,11 @@ func Watch(theWindowName string, theCreateNamedWindow bool) {
 // 	update()
 // 	context()
 // 	watch()
-func Imshow(theWindowName string, theFrame *gocv.Mat) {
+func Imshow(theWindowName string, theFrame gocv.Mat) {
 	ctx := __internal.Contexts[theWindowName]
 
 	Update(theWindowName)
-	ctx.Window.IMShow(*theFrame)
+	ctx.Window.IMShow(theFrame)
 }
 
 // def lastKeyPressed():
